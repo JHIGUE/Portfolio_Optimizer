@@ -75,8 +75,14 @@ tabs = st.tabs(["🎯 Plan", "📅 Gantt", "🆚 Comparador", "🎲 Riesgo", "�
 with tabs[0]: # PLAN
     c1, c2 = st.columns([2,1])
     with c1:
-        df_audit['Estado'] = np.where(df_audit.index.isin(df_opt.index), 'SI', 'NO')
-        fig = px.scatter(df_audit, x="Coste", y="Score_Real", color="Estado", size="Horas", hover_data=['Actividad'], color_discrete_map={'SI':'#00CC96', 'NO':'#EF553B'})
+        # CORRECCIÓN: Usamos 'df' (limpio) en lugar de 'df_audit' (crudo)
+        # porque 'df' es el que tiene las columnas 'Score_Real' y 'Coste' calculadas.
+        df['Estado'] = np.where(df.index.isin(df_opt.index), 'SI', 'NO')
+        
+        fig = px.scatter(df, x="Coste", y="Score_Real", color="Estado", size="Horas", 
+                         hover_data=['Actividad'], 
+                         color_discrete_map={'SI':'#00CC96', 'NO':'#EF553B'},
+                         title="Matriz de Valor vs Coste")
         st.plotly_chart(fig, use_container_width=True)
     with c2:
         st.dataframe(df_opt[['Actividad', 'Coste', 'Eficiencia']].sort_values(by='Eficiencia', ascending=False), hide_index=True)
@@ -110,4 +116,5 @@ with tabs[5]: # EXPORTAR
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan', index=False)
+
         st.download_button("📥 Excel", buffer.getvalue(), "Plan.xlsx")
