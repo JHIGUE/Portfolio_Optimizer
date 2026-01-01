@@ -45,7 +45,16 @@ def save_history(name, budget, hours, score, cost, time, items):
     else: df_new.to_csv(HISTORY_FILE, mode='a', header=False, index=False)
 
 # --- CARGA DE DATOS ---
-archivo = "Roadmap_2026_CORREGIDO.xlsx"
+# --- FIX DE RUTA ABSOLUTA ---
+import os
+# Obtenemos la ruta exacta donde está este archivo app.py en el servidor
+directorio_actual = os.path.dirname(os.path.abspath(__file__))
+# Construimos la ruta completa al Excel
+archivo = os.path.join(directorio_actual, "Roadmap_2026_CORREGIDO.xlsx")
+
+# Depuración visual (Para que veas si la ruta es correcta)
+st.write(f"📂 Buscando archivo en: {archivo}")
+# ----------------------------
 hoja = "4_Actividades_Priorizadas" # ¡Asegúrate que tu hoja se llama así!
 
 try:
@@ -140,4 +149,5 @@ with tabs[5]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan', index=False)
         st.download_button("📥 Descargar Excel", buffer.getvalue(), "Plan.xlsx")
+
 
