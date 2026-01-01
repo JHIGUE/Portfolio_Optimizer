@@ -5,54 +5,90 @@ import streamlit as st
 @st.cache_data
 def load_data(file_path, sheet_target):
     try:
-        # 1. Lectura directa (Sin buscar cabeceras raras)
-        # Asumimos que la fila 0 tiene los títulos correctos
+        # 1. Leemos el Excel tal cual
         df = pd.read_excel(file_path, sheet_name=sheet_target)
-
-        # 2. Normalización de Nombres (Por si acaso escribes "coste" o "Coste")
-        df.columns = df.columns.str.strip().str.capitalize() # Convierte "coste" -> "Coste"
         
-        # Mapeo de seguridad para nombres variantes
-        rename_map = {
-            'Pre-req': 'Pre_req', 'Dependencia': 'Pre_req',
-            'Prob': 'Probabilidad', 'Riesgo': 'Probabilidad',
-            'Coste €': 'Coste', 'Score final': 'Score'
-        }
-        df = df.rename(columns=rename_map)
+        # 2. Normalización de nombres de columnas (Todo a minúsculas y sin espacios extra)
+        # Esto soluciona problemas como " Actividad " vs "Actividad" o "COSTE" vs "Coste"
+        df.columns = df.columns.astype(str).str.strip().str.lower()
+        
+        # 3. Mapa de búsqueda inteligente
+        # Buscamos qué columna real corresponde a nuestro concepto interno
+        col_mapping = {}
+        
+        # Iteramos sobre las columnas reales del Excel
+        for col_real in df.columns:
+            # ID
+            if col_real in ['id', '#', 'id_actividad']: 
+                col_mapping['ID'] = col_real
+            # Actividad
+            elif 'actividad' in col_real: 
+                col_mapping['Actividad'] = col_real
+            # Coste (evitamos 'total')
+            elif 'coste' in col_real and 'total' not in col_real: 
+                col_mapping['Coste'] = col_real
+            # Horas
+            elif 'horas' in col_real: 
+                col_mapping['Horas'] = col_real
+            # Score
+            elif 'score' in col_real and 'final' in col_real: # Prioridad Score Final
+                col_mapping['Score'] = col_real
+            elif 'score' in col_real and 'Score' not in col_mapping: # Fallback
+                col_mapping['Score'] = col_real
+            # Pre-requisito
+            elif 'pre' in col_real and 'req' in col_real: 
+                col_mapping['Pre_req'] = col_real
+            elif 'dependencia' in col_real:
+                col_mapping['Pre_req'] = col_real
+            # Probabilidad
+            elif 'prob' in col_real or 'riesgo' in col_real:
+                col_mapping['Probabilidad'] = col_real
+            # Tipo
+            elif 'tipo' in col_real:
+                col_mapping['Tipo'] = col_real
 
-        # 3. Validación de Columnas Mínimas
-        required_cols = ['Id', 'Actividad', 'Coste', 'Horas', 'Score', 'Pre_req', 'Probabilidad']
-        missing = [c for c in required_cols if c not in df.columns]
+        # 4. Verificación de columnas críticas encontradas
+        required_targets = ['ID', 'Actividad', 'Coste', 'Horas', 'Score']
+        missing = [t for t in required_targets if t not in col_mapping]
         
         if missing:
-            # Intentamos arreglar mayúsculas/minúsculas antes de fallar
-            # Si falla, devolvemos vacío para que la App no explote
+            st.error(f"⚠️ Faltan columnas clave. El código buscó pero no encontró: {missing}")
+            st.write("Columnas detectadas en tu Excel (normalizadas):", df.columns.tolist())
             return pd.DataFrame(), pd.DataFrame()
 
-        # 4. Limpieza de Datos
-        df = df.dropna(subset=['Actividad']) # Borrar filas vacías
+        # 5. Renombrado Estándar
+        # Invertimos el mapa para renombrar: {nombre_feo: Nombre_Bonito}
+        rename_map = {v: k for k, v in col_mapping.items()}
+        df = df.rename(columns=rename_map)
         
-        cols_numeric = ['Id', 'Coste', 'Horas', 'Score', 'Pre_req', 'Probabilidad']
-        for col in cols_numeric:
+        # 6. Limpieza y Tipos
+        df = df.dropna(subset=['Actividad'])
+        
+        # Aseguramos columnas numéricas aunque vengan como texto
+        for col in ['Coste', 'Horas', 'Score', 'ID']:
             df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-
-        # 5. Lógica de Negocio (Cálculos)
-        # Normalizar probabilidad (si viene en % como 90, pasarlo a 0.9)
-        if df['Probabilidad'].max() > 1.5:
-            df['Probabilidad'] = df['Probabilidad'] / 100.0
             
-        # Calcular Score Real (Valor esperado)
+        # Tratamiento especial Pre_req (si no existe, creamos columna de ceros)
+        if 'Pre_req' not in df.columns: df['Pre_req'] = 0
+        else: df['Pre_req'] = pd.to_numeric(df['Pre_req'], errors='coerce').fillna(0)
+            
+        # Tratamiento especial Probabilidad
+        if 'Probabilidad' not in df.columns: df['Probabilidad'] = 1.0
+        else:
+            df['Probabilidad'] = pd.to_numeric(df['Probabilidad'], errors='coerce').fillna(1.0)
+            # Si detectamos porcentaje (ej: 90), pasamos a decimal (0.9)
+            if df['Probabilidad'].max() > 1.5: df['Probabilidad'] /= 100.0
+
+        # Tratamiento especial Tipo
+        if 'Tipo' not in df.columns: df['Tipo'] = 'General'
+
+        # 7. Cálculos Finales
         df['Score_Real'] = df['Score'] * df['Probabilidad']
-        
-        # Calcular Eficiencia (Para gráficos)
-        # Si Coste es 0, ponemos un valor alto (9999) para que salga primero
+        # Ratio eficiencia (9999 si es gratis)
         df['Eficiencia'] = np.where(df['Coste'] <= 0, 9999, df['Score_Real'] / df['Coste'])
 
-        # Renombrar ID a mayúsculas para que el engine lo encuentre
-        df = df.rename(columns={'Id': 'ID'})
-
-        return df, df.copy() # Devolvemos lo mismo (limpio) dos veces para compatibilidad
+        return df, df.copy()
 
     except Exception as e:
-        st.error(f"Error leyendo el Excel: {e}")
+        st.error(f"Error crítico leyendo Excel: {e}")
         return pd.DataFrame(), pd.DataFrame()
