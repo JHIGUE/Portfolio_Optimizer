@@ -27,39 +27,100 @@ def run_optimization(df, budget, hours):
 
 def calculate_sequential_gantt(df_opt, weekly_hours):
     if df_opt.empty: return pd.DataFrame()
+    
+    # --- 1. PREPARACIÓN DE DATOS ---
+    task_map = df_opt.set_index('ID').to_dict('index')
+    # Mapa de Hijos: {Padre -> [Lista de Hijos]}
+    children_map = {i: [] for i in df_opt['ID']}
+    in_degree = {i: 0 for i in df_opt['ID']} # Contador de padres pendientes
+    
+    for pid, row in task_map.items():
+        pre = row['Pre_req']
+        if pre > 0 and pre in task_map:
+            children_map[pre].append(pid)
+            in_degree[pid] += 1
+
+    # --- 2. CÁLCULO DEL "SCORE HEREDADO" (LA CLAVE DE TU LÓGICA) ---
+    # Una tarea hereda el Score de sus hijos si este es mayor que el suyo propio.
+    # Usamos recursividad con memoria (memoization) para propagar desde el nieto al abuelo.
+    
+    memo_effective_score = {}
+
+    def get_effective_score(task_id):
+        if task_id in memo_effective_score:
+            return memo_effective_score[task_id]
+        
+        # Mi valor base
+        my_score = task_map[task_id]['Score_Real']
+        
+        # Calculamos el valor máximo que puedo desbloquear (mis hijos)
+        max_child_potential = 0
+        if children_map[task_id]:
+            # Recursivamente buscamos el mejor score aguas abajo
+            max_child_potential = max([get_effective_score(child) for child in children_map[task_id]])
+        
+        # Mi prioridad real es el mayor entre MI valor y el de mi MEJOR descendiente
+        effective_score = max(my_score, max_child_potential)
+        
+        memo_effective_score[task_id] = effective_score
+        return effective_score
+
+    # Calculamos el score efectivo para todas las tareas
+    for pid in task_map:
+        get_effective_score(pid)
+
+    # --- 3. COLA DE PRIORIDAD ---
+    # Ahora el algoritmo usa el 'effective_score', no el 'Score_Real' original.
+    import heapq
+    queue = []
+    
+    # Inicializamos con las tareas que no tienen bloqueo (padres = 0)
+    for pid, count in in_degree.items():
+        if count == 0:
+            # Prioridad: -Score_Heredado (para que sea Max-Heap)
+            heapq.heappush(queue, (-memo_effective_score[pid], pid))
+            
+    # --- 4. CONSTRUCCIÓN DEL GANTT ---
     tasks = []
     end_dates_map = {} 
     resource_free_date = datetime(2026, 1, 1)
     
-    # Ordenación por Dependencia > Score > ID
-    df_sorted = df_opt.sort_values(by=['Pre_req', 'Score_Real', 'ID'], ascending=[True, False, True])
-    rows_pending = df_sorted.to_dict('records')
-    processed_count = 0
-    max_loops = len(rows_pending) * 5 
-    
-    while rows_pending and processed_count < max_loops:
-        row = rows_pending.pop(0)
-        processed_count += 1
-        pid = row['ID']
-        pre = row['Pre_req']
+    while queue:
+        # Sacamos la tarea con mayor "Potencial Estratégico"
+        eff_score_neg, pid = heapq.heappop(queue)
+        row = task_map[pid]
         
-        earliest_start = datetime(2026, 1, 1)
-        if pre > 0:
-            if pre in end_dates_map: earliest_start = end_dates_map[pre] + timedelta(days=1)
-            elif pre in df_opt['ID'].values:
-                rows_pending.append(row)
-                continue
-            else: pass
-
-        actual_start = max(earliest_start, resource_free_date)
+        # Cálculo de fechas (igual que antes)
+        pre = row['Pre_req']
+        earliest_start_by_dep = datetime(2026, 1, 1)
+        
+        if pre > 0 and pre in end_dates_map:
+            earliest_start_by_dep = end_dates_map[pre] + timedelta(days=1)
+            
+        actual_start = max(earliest_start_by_dep, resource_free_date)
         duration = max(1, int((row['Horas'] / weekly_hours) * 7))
         end_date = actual_start + timedelta(days=duration)
         
         end_dates_map[pid] = end_date
         resource_free_date = end_date 
         
-        tasks.append({'Tarea': row['Actividad'], 'Inicio': actual_start, 'Fin': end_date, 'Tipo': row.get('Tipo','G'), 'ID': pid, 'Pre_req': pre})
+        tasks.append({
+            'Tarea': row['Actividad'], 
+            'Inicio': actual_start, 
+            'Fin': end_date, 
+            'Tipo': row.get('Tipo', 'General'), 
+            'ID': pid, 
+            'Pre_req': pre,
+            # Guardamos el score heredado para que lo veas en el hover del gráfico
+            'Prioridad_Calc': -eff_score_neg 
+        })
         
+        # Desbloqueamos hijos
+        for child_id in children_map[pid]:
+            in_degree[child_id] -= 1
+            if in_degree[child_id] == 0:
+                heapq.heappush(queue, (-memo_effective_score[child_id], child_id))
+                
     return pd.DataFrame(tasks)
 
 def run_monte_carlo(df_plan, iterations=500):
@@ -70,4 +131,5 @@ def run_monte_carlo(df_plan, iterations=500):
         success = np.random.random(size=len(df_plan)) < df_plan['Probabilidad'].values
         real_v = np.where(success, df_plan['Score'], 0).sum()
         res.append({'Horas': real_h, 'Valor': real_v})
+
     return pd.DataFrame(res)
