@@ -12,26 +12,6 @@ from engine import run_optimization, calculate_sequential_gantt, run_monte_carlo
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Strategic Portfolio Optimizer", layout="wide")
-# --- BLOQUE DE DEPURACIÓN (CSI) ---
-import os
-
-st.error("🕵️ MODO DETECTIVE ACTIVADO")
-st.write(f"📍 Estoy ejecutándome en la carpeta: **{os.getcwd()}**")
-
-archivos_aqui = os.listdir('.')
-st.write("📂 Estos son los archivos que veo aquí mismo:", archivos_aqui)
-
-# Buscamos el Excel recursivamente por si está escondido en una subcarpeta
-found = False
-for root, dirs, files in os.walk("."):
-    for file in files:
-        if "Roadmap" in file:
-            st.success(f"✅ ¡ENCONTRADO! El archivo está en: {os.path.join(root, file)}")
-            found = True
-
-if not found:
-    st.error("❌ Definitivamente NO veo ningún archivo que contenga 'Roadmap' en el nombre en todo el servidor.")
-# ----------------------------------
 st.markdown("<style>.stTabs [data-baseweb='tab-list'] {gap: 10px;}</style>", unsafe_allow_html=True)
 
 # --- ESTADO Y PERSISTENCIA ---
@@ -44,31 +24,24 @@ def save_history(name, budget, hours, score, cost, time, items):
     if not os.path.exists(HISTORY_FILE): df_new.to_csv(HISTORY_FILE, index=False)
     else: df_new.to_csv(HISTORY_FILE, mode='a', header=False, index=False)
 
-# --- CARGA DE DATOS ---
-# --- FIX DE RUTA ABSOLUTA ---
-import os
-# Obtenemos la ruta exacta donde está este archivo app.py en el servidor
-directorio_actual = os.path.dirname(os.path.abspath(__file__))
-# Construimos la ruta completa al Excel
-archivo = os.path.join(directorio_actual, "Roadmap_2026_CORREGIDO.xlsx")
-
-# Depuración visual (Para que veas si la ruta es correcta)
-st.write(f"📂 Buscando archivo en: {archivo}")
-# ----------------------------
-hoja = "4_Actividades_Priorizadas" # ¡Asegúrate que tu hoja se llama así!
+# --- CARGA DE DATOS (ROBUSTA) ---
+# Usamos ruta absoluta para evitar problemas, aunque el Reboot ya arregló la caché
+current_dir = os.path.dirname(os.path.abspath(__file__))
+archivo = os.path.join(current_dir, "Roadmap_2026_CORREGIDO.xlsx")
+hoja = "4_Actividades_Priorizadas" 
 
 try:
-    # Ahora load_data devuelve dos dataframes iguales y limpios
+    # Llamamos al data_loader inteligente (Radar)
     df, _ = load_data(archivo, hoja)
     if df.empty: 
-        st.error("⚠️ No se pudieron leer los datos. Revisa que el Excel tenga las columnas: ID, Actividad, Coste, Horas, Score, Pre_req, Probabilidad.")
+        st.error("⚠️ El Excel parece vacío o no se encuentran las columnas clave.")
         st.stop()
 except Exception as e:
-    st.error(f"Error crítico: {e}")
+    st.error(f"Error cargando datos: {e}")
     st.stop()
 
 # --- SIDEBAR (CONTROLES) ---
-st.sidebar.header("🕹️ Controles de Estrategia")
+st.sidebar.header("🕹️ Strategic Controls")
 budget = st.sidebar.slider("💰 Presupuesto (€)", 0, 10000, 650, step=50)
 hours_total = st.sidebar.slider("⏳ Bolsa Horas Anual", 0, 2000, 300, step=10)
 hours_week = st.sidebar.number_input("Velocidad (Horas/Semana)", 1, 40, 10)
@@ -94,12 +67,12 @@ val = df_opt['Score_Real'].sum()
 
 # --- DASHBOARD ---
 st.title("Strategic Portfolio Optimizer (SPO)")
-st.caption("AI-Driven Resource Allocation Engine")
+st.caption(f"Roadmap 2026 | {len(df)} Iniciativas Disponibles")
 
 k1, k2, k3, k4 = st.columns(4)
 k1.metric("Valor Estratégico", f"{val:.1f}")
-k2.metric("Inversión", f"{df_opt['Coste'].sum()} €", delta=f"{budget - df_opt['Coste'].sum()} € rest")
-k3.metric("Tiempo", f"{df_opt['Horas'].sum()} h", delta=f"{hours_total - df_opt['Horas'].sum()} h rest")
+k2.metric("Inversión", f"{df_opt['Coste'].sum()} €", delta=f"{budget - df_opt['Coste'].sum()} € libre")
+k3.metric("Tiempo", f"{df_opt['Horas'].sum()} h", delta=f"{hours_total - df_opt['Horas'].sum()} h libre")
 k4.metric("Actividades", len(df_opt))
 
 tabs = st.tabs(["🎯 Plan", "📅 Gantt", "🆚 Comparador", "🎲 Riesgo", "🔍 Auditoría", "📥 Exportar"])
@@ -107,16 +80,14 @@ tabs = st.tabs(["🎯 Plan", "📅 Gantt", "🆚 Comparador", "🎲 Riesgo", "�
 with tabs[0]: # PLAN
     c1, c2 = st.columns([2,1])
     with c1:
-        # AQUÍ ESTABA EL ERROR: Usamos 'df' que tiene todas las columnas calculadas
         df['Estado'] = np.where(df.index.isin(df_opt.index), 'SI', 'NO')
-        
-        # Gráfico seguro
         fig = px.scatter(df, x="Coste", y="Score_Real", color="Estado", size="Horas", 
                          hover_data=['Actividad'], 
                          color_discrete_map={'SI':'#00CC96', 'NO':'#EF553B'},
-                         title="Matriz Valor / Coste")
+                         title="Matriz Eficiencia (Valor vs Coste)")
         st.plotly_chart(fig, use_container_width=True)
     with c2:
+        st.markdown("###### Prioridades Seleccionadas")
         st.dataframe(df_opt[['Actividad', 'Coste', 'Eficiencia']].sort_values(by='Eficiencia', ascending=False), hide_index=True)
 
 with tabs[1]: # GANTT
@@ -125,29 +96,30 @@ with tabs[1]: # GANTT
         fig_g = px.timeline(gantt, x_start="Inicio", x_end="Fin", y="Tarea", color="Tipo", hover_data=['Pre_req'])
         fig_g.update_yaxes(autorange="reversed")
         st.plotly_chart(fig_g, use_container_width=True)
-    else: st.info("No hay tareas seleccionadas")
+        st.success(f"📅 Fecha estimada de finalización: **{gantt['Fin'].max().strftime('%d/%m/%Y')}**")
+    else: st.info("No hay tareas seleccionadas para generar cronograma.")
 
 with tabs[2]: # COMPARADOR
     if st.session_state['escenarios']:
         cdf = pd.DataFrame(st.session_state['escenarios'])
         st.dataframe(cdf, use_container_width=True)
         st.plotly_chart(px.bar(cdf, x='Nombre', y='Valor', color='Coste'), use_container_width=True)
+    else: st.info("Crea escenarios en el menú lateral para comparar.")
 
 with tabs[3]: # RIESGO
-    if st.button("Lanzar Monte Carlo"):
+    if st.button("Lanzar Simulación Monte Carlo"):
         mc = run_monte_carlo(df_opt)
         c1, c2 = st.columns(2)
-        c1.plotly_chart(px.histogram(mc, x="Horas"), use_container_width=True)
-        c2.plotly_chart(px.histogram(mc, x="Valor"), use_container_width=True)
+        c1.plotly_chart(px.histogram(mc, x="Horas", title="Distribución de Tiempo Real (Riesgo)"), use_container_width=True)
+        c2.plotly_chart(px.histogram(mc, x="Valor", title="Distribución de Valor Esperado"), use_container_width=True)
 
 with tabs[4]: # AUDITORÍA
+    st.write("Datos brutos leídos del Excel:")
     st.dataframe(df, use_container_width=True)
 
 with tabs[5]: # EXPORTAR
     if not df_opt.empty:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-            df_opt.to_excel(writer, sheet_name='Plan', index=False)
-        st.download_button("📥 Descargar Excel", buffer.getvalue(), "Plan.xlsx")
-
-
+            df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
+        st.download_button("📥 Descargar Plan (Excel)", buffer.getvalue(), "Plan_2026.xlsx")
