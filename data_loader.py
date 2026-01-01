@@ -5,65 +5,54 @@ import streamlit as st
 @st.cache_data
 def load_data(file_path, sheet_target):
     try:
-        # 1. Escaneo inteligente de cabecera
-        df_scan = pd.read_excel(file_path, sheet_name=sheet_target, header=None, nrows=20)
-        header_idx = None
-        for i, row in df_scan.iterrows():
-            s = row.astype(str).str.lower().tolist()
-            if any('tipo' in x for x in s) and any('coste' in x for x in s):
-                header_idx = i
-                break
-        
-        if header_idx is None: return pd.DataFrame()
+        # 1. Lectura directa (Sin buscar cabeceras raras)
+        # Asumimos que la fila 0 tiene los títulos correctos
+        df = pd.read_excel(file_path, sheet_name=sheet_target)
 
-        # 2. Lectura real
-        df_raw = pd.read_excel(file_path, sheet_name=sheet_target, header=header_idx)
+        # 2. Normalización de Nombres (Por si acaso escribes "coste" o "Coste")
+        df.columns = df.columns.str.strip().str.capitalize() # Convierte "coste" -> "Coste"
         
-        # 3. Mapeo de columnas (Búsqueda por palabras clave)
-        cols = {}
-        for idx, col_name in enumerate(df_raw.columns):
-            c = str(col_name).lower().strip()
-            if c in ['#', 'id', 'id_actividad'] and 'id' not in cols: cols['id'] = idx
-            elif 'actividad' in c: cols['actividad'] = idx
-            elif 'tipo' in c: cols['tipo'] = idx
-            elif 'horas' in c: cols['horas'] = idx
-            elif 'coste' in c and 'total' not in c: cols['coste'] = idx
-            elif 'score' in c and 'final' in c: cols['score'] = idx
-            elif 'score' in c and 'roi' in c and 'score' not in cols: cols['score'] = idx
-            elif 'pre_req' in c or 'dependencia' in c: cols['pre_req'] = idx
-            elif 'prob' in c or 'riesgo' in c: cols['prob'] = idx
+        # Mapeo de seguridad para nombres variantes
+        rename_map = {
+            'Pre-req': 'Pre_req', 'Dependencia': 'Pre_req',
+            'Prob': 'Probabilidad', 'Riesgo': 'Probabilidad',
+            'Coste €': 'Coste', 'Score final': 'Score'
+        }
+        df = df.rename(columns=rename_map)
 
-        df = pd.DataFrame()
-        def ext(k, n): 
-            if k in cols: df[n] = df_raw.iloc[:, cols[k]]
+        # 3. Validación de Columnas Mínimas
+        required_cols = ['Id', 'Actividad', 'Coste', 'Horas', 'Score', 'Pre_req', 'Probabilidad']
+        missing = [c for c in required_cols if c not in df.columns]
         
-        ext('actividad', 'Actividad')
-        ext('id', 'ID')
-        ext('tipo', 'Tipo')
-        ext('horas', 'Horas')
-        ext('coste', 'Coste')
-        ext('score', 'Score')
-        ext('pre_req', 'Pre_req')
-        ext('prob', 'Probabilidad')
+        if missing:
+            # Intentamos arreglar mayúsculas/minúsculas antes de fallar
+            # Si falla, devolvemos vacío para que la App no explote
+            return pd.DataFrame(), pd.DataFrame()
 
-        if 'Actividad' in df.columns: df = df.dropna(subset=['Actividad'])
+        # 4. Limpieza de Datos
+        df = df.dropna(subset=['Actividad']) # Borrar filas vacías
         
-        # Limpieza numérica
-        for c in ['Horas', 'Coste', 'Score', 'ID', 'Pre_req', 'Probabilidad']:
-            if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
+        cols_numeric = ['Id', 'Coste', 'Horas', 'Score', 'Pre_req', 'Probabilidad']
+        for col in cols_numeric:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
-        # Lógica de negocio (Probabilidad y Score Real)
-        if 'Probabilidad' not in df.columns: df['Probabilidad'] = 1.0
-        else:
-            df['Probabilidad'] = df['Probabilidad'].replace(0, 1.0)
-            if df['Probabilidad'].max() > 1.5: df['Probabilidad'] /= 100.0
+        # 5. Lógica de Negocio (Cálculos)
+        # Normalizar probabilidad (si viene en % como 90, pasarlo a 0.9)
+        if df['Probabilidad'].max() > 1.5:
+            df['Probabilidad'] = df['Probabilidad'] / 100.0
+            
+        # Calcular Score Real (Valor esperado)
+        df['Score_Real'] = df['Score'] * df['Probabilidad']
         
-        if 'Score' in df.columns: 
-            df['Score_Real'] = df['Score'] * df['Probabilidad']
-            # Ratio visual para auditoría
-            df['Eficiencia'] = np.where(df['Coste'] <= 0, 999999, df['Score_Real'] / df['Coste'])
+        # Calcular Eficiencia (Para gráficos)
+        # Si Coste es 0, ponemos un valor alto (9999) para que salga primero
+        df['Eficiencia'] = np.where(df['Coste'] <= 0, 9999, df['Score_Real'] / df['Coste'])
 
-        return df, df_raw # Devolvemos limpio y crudo (para auditoría)
+        # Renombrar ID a mayúsculas para que el engine lo encuentre
+        df = df.rename(columns={'Id': 'ID'})
+
+        return df, df.copy() # Devolvemos lo mismo (limpio) dos veces para compatibilidad
+
     except Exception as e:
-        st.error(f"Error en data_loader: {e}")
+        st.error(f"Error leyendo el Excel: {e}")
         return pd.DataFrame(), pd.DataFrame()
