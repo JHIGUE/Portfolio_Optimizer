@@ -12,6 +12,26 @@ from engine import run_optimization, calculate_sequential_gantt, run_monte_carlo
 
 # --- CONFIGURACIÓN ---
 st.set_page_config(page_title="Strategic Portfolio Optimizer", layout="wide")
+# --- BLOQUE DE DEPURACIÓN (CSI) ---
+import os
+
+st.error("🕵️ MODO DETECTIVE ACTIVADO")
+st.write(f"📍 Estoy ejecutándome en la carpeta: **{os.getcwd()}**")
+
+archivos_aqui = os.listdir('.')
+st.write("📂 Estos son los archivos que veo aquí mismo:", archivos_aqui)
+
+# Buscamos el Excel recursivamente por si está escondido en una subcarpeta
+found = False
+for root, dirs, files in os.walk("."):
+    for file in files:
+        if "Roadmap" in file:
+            st.success(f"✅ ¡ENCONTRADO! El archivo está en: {os.path.join(root, file)}")
+            found = True
+
+if not found:
+    st.error("❌ Definitivamente NO veo ningún archivo que contenga 'Roadmap' en el nombre en todo el servidor.")
+# ----------------------------------
 st.markdown("<style>.stTabs [data-baseweb='tab-list'] {gap: 10px;}</style>", unsafe_allow_html=True)
 
 # --- ESTADO Y PERSISTENCIA ---
@@ -120,3 +140,4 @@ with tabs[5]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan', index=False)
         st.download_button("📥 Descargar Excel", buffer.getvalue(), "Plan.xlsx")
+
