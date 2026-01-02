@@ -98,48 +98,65 @@ with tabs[1]: # GANTT
         st.success(f"📅 Fin Estimado: **{gantt['Fin'].max().strftime('%d/%m/%Y')}**")
     else: st.info("Sin tareas seleccionadas.")
 
-with tabs[2]: # FRONTERA (NUEVO)
+with tabs[2]: # FRONTERA
     st.markdown("### 📈 Frontera de Eficiencia de Pareto")
-    st.markdown("Este gráfico responde a: *¿Cuánto valor extra gano realmente si invierto más dinero?*")
+    st.markdown("Este gráfico simula escenarios desde 0€ hasta comprar **todo el catálogo**, para que veas dónde empieza a perder sentido seguir invirtiendo.")
     
-    if st.button("🚀 Calcular Frontera de Eficiencia"):
-        # Simulamos rangos de presupuesto (desde 0 hasta el doble del actual o 2000€)
-        max_b = max(2000, budget * 2)
-        steps = np.linspace(0, max_b, 20)
+    if st.button("🚀 Calcular Frontera"):
+        # 1. Definir el horizonte real (Coste de comprar TODO el Excel)
+        max_possible_cost = df['Coste'].sum()
+        # Simulamos desde 0 hasta el total posible (con un margen del 10%)
+        limit_sim = max(max_possible_cost * 1.1, budget * 2)
+        steps = np.linspace(0, limit_sim, 30) # 30 pasos para más suavidad
         
         data_frontier = []
         pbar = st.progress(0)
         
         for i, b_sim in enumerate(steps):
-            # Ejecutamos el motor para cada escenario hipotético
-            # Mantenemos las horas fijas, solo variamos dinero para ver la curva financiera
+            # Optimizamos manteniedo horas fijas (asumimos que el dinero es la variable libre aquí)
             r = run_optimization(df, b_sim, hours_total)
             data_frontier.append({
                 'Presupuesto': b_sim, 
                 'Valor': r['Score_Real'].sum(),
                 'Coste_Real': r['Coste'].sum()
             })
-            pbar.progress((i+1)/20)
+            pbar.progress((i+1)/30)
             
         df_front = pd.DataFrame(data_frontier)
         
-        # 1. Pintamos la Línea (Curva de Pareto)
+        # 2. Gráfico de Línea Suavizada
         fig_f = px.line(df_front, x="Coste_Real", y="Valor", markers=True, 
                         title="Curva de Retorno de Inversión (ROI Estratégico)", 
-                        labels={"Coste_Real": "Inversión (€)", "Valor": "Valor Estratégico Total"})
+                        labels={"Coste_Real": "Inversión Acumulada (€)", "Valor": "Valor Estratégico Total"})
         
-        # 2. Pintamos TU Posición Actual (Estrella Roja)
+        # 3. Línea Vertical (Tu Límite Actual)
+        current_cost = df_opt['Coste'].sum()
+        current_val = val
+        
+        fig_f.add_vline(x=current_cost, line_width=2, line_dash="dash", line_color="red", annotation_text="Tú estás aquí")
+        
+        # 4. Tu Punto Exacto (Estrella)
         fig_f.add_trace(go.Scatter(
-            x=[df_opt['Coste'].sum()], 
-            y=[val],
+            x=[current_cost], 
+            y=[current_val],
             mode='markers',
             marker=dict(color='red', size=15, symbol='star'),
             name="Tu Plan Actual"
         ))
         
+        # Ajustes visuales
+        fig_f.update_layout(xaxis_range=[0, limit_sim])
+        
         st.plotly_chart(fig_f, use_container_width=True)
-        st.info("💡 **Interpretación:** Si la curva se aplana, significa que gastar más dinero ya no aporta valor significativo (has comprado todo lo 'bueno'). El punto rojo indica dónde estás tú respecto al óptimo matemático.")
-
+        
+        # Interpretación Dinámica
+        st.info("""
+        💡 **Cómo leer esto:**
+        * **Zona Empinada (Izquierda):** Alta rentabilidad. Cada euro aporta mucho valor.
+        * **Zona Plana (Derecha):** Rendimientos decrecientes. Estás gastando dinero en tareas de bajo valor.
+        * **Tu Posición:** Si estás en la parte plana, considera reducir presupuesto. Si estás en la parte empinada, estás perdiendo oportunidades por falta de fondos.
+        """)
+        
 with tabs[3]: # AUDITORÍA (ACTUALIZADA)
     st.markdown("### 🕵️ Auditoría del Algoritmo")
     st.markdown("Desglose del cálculo de `Score_Base` y `Probabilidad_Acumulada`.")
@@ -202,5 +219,6 @@ with tabs[6]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
