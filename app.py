@@ -121,9 +121,30 @@ with tabs[2]: # AUDITORÍA (ACTUALIZADA)
 with tabs[3]: # RIESGO
     if st.button("Lanzar Simulación Monte Carlo"):
         mc = run_monte_carlo(df_opt)
+        
+        # 1. Gráficos Visuales
         c1, c2 = st.columns(2)
         c1.plotly_chart(px.histogram(mc, x="Horas", title="Riesgo de Tiempo (Prob. Individual)"), use_container_width=True)
         c2.plotly_chart(px.histogram(mc, x="Valor", title="Valor Esperado (Score Base)"), use_container_width=True)
+        
+        # 2. Interpretación en Lenguaje Natural (RECUPERADO)
+        # Calculamos percentiles clave
+        p50_hours = np.percentile(mc['Horas'], 50) # Mediana (lo más probable)
+        p90_hours = np.percentile(mc['Horas'], 90) # Caso pesimista (90% de certeza)
+        p10_value = np.percentile(mc['Valor'], 10) # Caso pesimista de valor (mínimo garantizado al 90%)
+        avg_value = mc['Valor'].mean()
+        
+        st.divider()
+        st.markdown("### 🧠 Interpretación de Escenarios")
+        st.info(f"""
+        **⏱️ Sobre el Tiempo:**
+        * **Lo más probable (Escenario Realista):** El proyecto te tomará unas **{int(p50_hours)} horas**.
+        * **El riesgo (Escenario Pesimista):** Hay un 10% de posibilidades de que se complique hasta las **{int(p90_hours)} horas** debido a la incertidumbre.
+        
+        **💎 Sobre el Valor:**
+        * **Suelo de Seguridad:** Incluso si muchas tareas fallan (Probabilidad), tienes un 90% de certeza de conseguir al menos **{p10_value:.1f} puntos** de valor estratégico.
+        * **Valor Esperado:** De media, este plan aporta **{avg_value:.1f} puntos**.
+        """)
 
 with tabs[4]: # COMPARADOR
     if st.session_state['escenarios']:
@@ -138,3 +159,4 @@ with tabs[5]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
