@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import numpy as np
+import plotly.graph_objects as go
 import io
 import os
 from datetime import datetime
@@ -70,7 +71,7 @@ k2.metric("Inversión", f"{df_opt['Coste'].sum()} €", delta=f"{budget - df_opt
 k3.metric("Tiempo", f"{df_opt['Horas'].sum()} h", delta=f"{hours_total - df_opt['Horas'].sum()} h libre")
 k4.metric("Items", len(df_opt))
 
-tabs = st.tabs(["🎯 Plan", "📅 Gantt", "🔍 Auditoría Avanzada", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
+tabs = st.tabs(["🎯 Plan", "📅 Gantt", "📈 Frontera", "🔍 Auditoría Avanzada", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
 
 with tabs[0]: # PLAN
     c1, c2 = st.columns([2,1])
@@ -97,7 +98,49 @@ with tabs[1]: # GANTT
         st.success(f"📅 Fin Estimado: **{gantt['Fin'].max().strftime('%d/%m/%Y')}**")
     else: st.info("Sin tareas seleccionadas.")
 
-with tabs[2]: # AUDITORÍA (ACTUALIZADA)
+with tabs[2]: # FRONTERA (NUEVO)
+    st.markdown("### 📈 Frontera de Eficiencia de Pareto")
+    st.markdown("Este gráfico responde a: *¿Cuánto valor extra gano realmente si invierto más dinero?*")
+    
+    if st.button("🚀 Calcular Frontera de Eficiencia"):
+        # Simulamos rangos de presupuesto (desde 0 hasta el doble del actual o 2000€)
+        max_b = max(2000, budget * 2)
+        steps = np.linspace(0, max_b, 20)
+        
+        data_frontier = []
+        pbar = st.progress(0)
+        
+        for i, b_sim in enumerate(steps):
+            # Ejecutamos el motor para cada escenario hipotético
+            # Mantenemos las horas fijas, solo variamos dinero para ver la curva financiera
+            r = run_optimization(df, b_sim, hours_total)
+            data_frontier.append({
+                'Presupuesto': b_sim, 
+                'Valor': r['Score_Real'].sum(),
+                'Coste_Real': r['Coste'].sum()
+            })
+            pbar.progress((i+1)/20)
+            
+        df_front = pd.DataFrame(data_frontier)
+        
+        # 1. Pintamos la Línea (Curva de Pareto)
+        fig_f = px.line(df_front, x="Coste_Real", y="Valor", markers=True, 
+                        title="Curva de Retorno de Inversión (ROI Estratégico)", 
+                        labels={"Coste_Real": "Inversión (€)", "Valor": "Valor Estratégico Total"})
+        
+        # 2. Pintamos TU Posición Actual (Estrella Roja)
+        fig_f.add_trace(go.Scatter(
+            x=[df_opt['Coste'].sum()], 
+            y=[val],
+            mode='markers',
+            marker=dict(color='red', size=15, symbol='star'),
+            name="Tu Plan Actual"
+        ))
+        
+        st.plotly_chart(fig_f, use_container_width=True)
+        st.info("💡 **Interpretación:** Si la curva se aplana, significa que gastar más dinero ya no aporta valor significativo (has comprado todo lo 'bueno'). El punto rojo indica dónde estás tú respecto al óptimo matemático.")
+
+with tabs[3]: # AUDITORÍA (ACTUALIZADA)
     st.markdown("### 🕵️ Auditoría del Algoritmo")
     st.markdown("Desglose del cálculo de `Score_Base` y `Probabilidad_Acumulada`.")
     
@@ -118,7 +161,7 @@ with tabs[2]: # AUDITORÍA (ACTUALIZADA)
         }
     )
 
-with tabs[3]: # RIESGO
+with tabs[4]: # RIESGO
     if st.button("Lanzar Simulación Monte Carlo"):
         mc = run_monte_carlo(df_opt)
         
@@ -146,17 +189,18 @@ with tabs[3]: # RIESGO
         * **Valor Esperado:** De media, este plan aporta **{avg_value:.1f} puntos**.
         """)
 
-with tabs[4]: # COMPARADOR
+with tabs[5]: # COMPARADOR
     if st.session_state['escenarios']:
         cdf = pd.DataFrame(st.session_state['escenarios'])
         st.dataframe(cdf, use_container_width=True)
         st.plotly_chart(px.bar(cdf, x='Nombre', y='Valor', color='Coste'), use_container_width=True)
     else: st.info("Añade escenarios.")
 
-with tabs[5]: # EXPORTAR
+with tabs[6]: # EXPORTAR
     if not df_opt.empty:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
