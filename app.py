@@ -71,9 +71,76 @@ k2.metric("Inversión", f"{df_opt['Coste'].sum()} €", delta=f"{budget - df_opt
 k3.metric("Tiempo", f"{df_opt['Horas'].sum()} h", delta=f"{hours_total - df_opt['Horas'].sum()} h libre")
 k4.metric("Items", len(df_opt))
 
-tabs = st.tabs(["🎯 Plan", "📅 Gantt", "📈 Frontera", "🔍 Auditoría Avanzada", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
+tabs = st.tabs(["📖 Contexto", "🎯 Plan", "📅 Gantt", "📈 Frontera", "🔍 Auditoría", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
 
-with tabs[0]: # PLAN
+with tabs[0]: # CONTEXTO (NUEVA PESTAÑA)
+    st.markdown("## 🧠 Manifiesto del Algoritmo (SPO)")
+    st.markdown("""
+    Bienvenido al **Strategic Portfolio Optimizer**. Esta herramienta no decide por ti, pero **matematiza tu intuición** para maximizar el impacto de tu carrera hacia el perfil de *AI Solutions Architect*.
+    """)
+    
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.info("### 1. ¿Qué es el 'Valor Estratégico'?")
+        st.markdown("""
+        El **KPI Principal (Score Real)** no mide dinero ni horas. Mide **Impacto Profesional**.
+        
+        Se calcula mediante una **Fórmula Ponderada Ajustada al Riesgo**:
+        """)
+        st.latex(r'''
+        ScoreBase = (Empleabilidad \times 0.4) + (Taxonomía \times 0.4) + (Facilidad \times 0.2)
+        ''')
+        st.markdown("""
+        * **Empleabilidad (40%):** Demanda real del mercado en 2026.
+        * **Taxonomía (40%):** Relevancia para el rol de Arquitecto (Orchestration/Governance > Infra).
+        * **Facilidad (20%):** Priorización de *Quick Wins*.
+        """)
+        
+        st.markdown("#### 📉 El Ajuste de Realidad")
+        st.markdown("El valor final se penaliza por la **Probabilidad Acumulada** de la cadena de dependencias:")
+        st.latex(r'''
+        ValorReal = ScoreBase \times (P_{propia} \times P_{padre} \times P_{abuelo}...)
+        ''')
+        st.caption("Una tarea valiosa (10 pts) que depende de 3 tareas difíciles pierde valor real hoy.")
+
+    with c2:
+        st.success("### 2. Guía de Interpretación Visual")
+        
+        with st.expander("🎯 Matriz de Valor (Scatter)", expanded=True):
+            st.markdown("""
+            * **Eje Y (Alto):** Lo que debes hacer (Alto Valor).
+            * **Eje X (Derecha):** Lo que te costará dinero.
+            * **Burbujas Verdes:** Seleccionadas por el algoritmo.
+            * **Burbujas Rojas:** Descartadas (No caben en presupuesto o tiempo).
+            """)
+            
+        with st.expander("📅 Gantt Inteligente (Back-Propagation)"):
+            st.markdown("""
+            El cronograma no es lineal. Usa lógica de **Score Heredado**:
+            * Si una Tarea A (pequeña) bloquea a una Tarea B (enorme valor), **la Tarea A hereda la prioridad de B**.
+            * El algoritmo prioriza los "desbloqueadores" de valor.
+            """)
+            
+        with st.expander("📈 Frontera de Pareto"):
+            st.markdown("""
+            * **La Curva Azul:** Todo el valor posible que podrías comprar si fueras rico.
+            * **La Estrella Roja (TÚ):** Tu posición actual.
+            * **Estrategia:** Si estás en la zona empinada, invierte más. Si estás en la zona plana, guarda el dinero.
+            """)
+
+    st.divider()
+    st.markdown("### ⚙️ Taxonomía de Arquitectura 2026")
+    st.markdown("Las actividades se clasifican y puntúan según su capa estratégica:")
+    
+    cols = st.columns(5)
+    cols[0].metric("Orchestration", "10 pts", "Core Agéntico")
+    cols[1].metric("Governance", "9 pts", "Diferenciador Enterprise")
+    cols[2].metric("Data & Memory", "9 pts", "Base del Conocimiento")
+    cols[3].metric("Models (LLMs)", "7 pts", "Commodity Potente")
+    cols[4].metric("Infrastructure", "5 pts", "Utility")
+
+with tabs[1]: # PLAN
     c1, c2 = st.columns([2,1])
     with c1:
         df['Estado'] = np.where(df.index.isin(df_opt.index), 'SI', 'NO')
@@ -87,7 +154,7 @@ with tabs[0]: # PLAN
         st.markdown("###### Top Selección por Eficiencia")
         st.dataframe(df_opt[['Actividad', 'Capa_desc', 'Score_Real', 'ROI']].sort_values(by='ROI', ascending=False), hide_index=True)
 
-with tabs[1]: # GANTT
+with tabs[2]: # GANTT
     gantt = calculate_sequential_gantt(df_opt, hours_week)
     if not gantt.empty:
         # Coloreamos por Capa (Taxonomía) para ver la estrategia visualmente
@@ -98,7 +165,7 @@ with tabs[1]: # GANTT
         st.success(f"📅 Fin Estimado: **{gantt['Fin'].max().strftime('%d/%m/%Y')}**")
     else: st.info("Sin tareas seleccionadas.")
 
-with tabs[2]: # FRONTERA
+with tabs[3]: # FRONTERA
     st.markdown("### 📈 Frontera de Eficiencia de Pareto")
     st.markdown("Este gráfico muestra todo el recorrido posible: desde invertir 0€ hasta **comprarlo todo**. El punto rojo eres tú.")
     
@@ -164,7 +231,7 @@ with tabs[2]: # FRONTERA
         * **Si tu estrella está en la zona plana (arriba a la derecha):** Ya has capturado casi todo el valor del Excel. Gastar más apenas te aportará mejoras (Retornos Decrecientes).
         """)
         
-with tabs[3]: # AUDITORÍA (ACTUALIZADA)
+with tabs[4]: # AUDITORÍA (ACTUALIZADA)
     st.markdown("### 🕵️ Auditoría del Algoritmo")
     st.markdown("Desglose del cálculo de `Score_Base` y `Probabilidad_Acumulada`.")
     
@@ -185,7 +252,7 @@ with tabs[3]: # AUDITORÍA (ACTUALIZADA)
         }
     )
 
-with tabs[4]: # RIESGO
+with tabs[5]: # RIESGO
     if st.button("Lanzar Simulación Monte Carlo"):
         mc = run_monte_carlo(df_opt)
         
@@ -213,19 +280,20 @@ with tabs[4]: # RIESGO
         * **Valor Esperado:** De media, este plan aporta **{avg_value:.1f} puntos**.
         """)
 
-with tabs[5]: # COMPARADOR
+with tabs[6]: # COMPARADOR
     if st.session_state['escenarios']:
         cdf = pd.DataFrame(st.session_state['escenarios'])
         st.dataframe(cdf, use_container_width=True)
         st.plotly_chart(px.bar(cdf, x='Nombre', y='Valor', color='Coste'), use_container_width=True)
     else: st.info("Añade escenarios.")
 
-with tabs[6]: # EXPORTAR
+with tabs[7]: # EXPORTAR
     if not df_opt.empty:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
