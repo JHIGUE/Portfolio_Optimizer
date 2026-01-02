@@ -5,70 +5,90 @@ import streamlit as st
 @st.cache_data
 def load_data(file_path, sheet_target):
     try:
-        # 1. EL RADAR: Leemos las primeras 20 filas "a ciegas"
-        df_scan = pd.read_excel(file_path, sheet_name=sheet_target, header=None, nrows=20)
-        
-        header_row_index = None
-        
-        # Buscamos la fila que tenga las palabras "actividad" y "coste"
-        for i, row in df_scan.iterrows():
-            row_text = row.astype(str).str.lower().tolist()
-            if any('actividad' in x for x in row_text) and any('coste' in x for x in row_text):
-                header_row_index = i
-                break
-        
-        if header_row_index is None:
-            # Si falla el radar, probamos la fila 0 por defecto
-            header_row_index = 0
+        # 1. Carga de Datos
+        df = pd.read_excel(file_path, sheet_name=sheet_target)
 
-        # 2. LECTURA OFICIAL: Leemos usando la fila detectada
-        df = pd.read_excel(file_path, sheet_name=sheet_target, header=header_row_index)
+        # 2. Normalización de Cabeceras (Strip y Capitalize para consistencia)
+        df.columns = df.columns.astype(str).str.strip().str.capitalize()
         
-        # 3. NORMALIZACIÓN (Hacerlo robusto a mayúsculas/minúsculas)
-        df.columns = df.columns.astype(str).str.strip().str.lower()
-        
-        col_mapping = {}
-        for col_real in df.columns:
-            if col_real in ['id', '#', 'id_actividad']: col_mapping['ID'] = col_real
-            elif 'actividad' in col_real: col_mapping['Actividad'] = col_real
-            elif 'coste' in col_real: col_mapping['Coste'] = col_real
-            elif 'horas' in col_real: col_mapping['Horas'] = col_real
-            elif 'score' in col_real: col_mapping['Score'] = col_real
-            elif 'pre' in col_real or 'dependencia' in col_real: col_mapping['Pre_req'] = col_real
-            elif 'prob' in col_real or 'riesgo' in col_real: col_mapping['Probabilidad'] = col_real
-            elif 'tipo' in col_real: col_mapping['Tipo'] = col_real
-
-        # 4. RENOMBRADO
-        rename_map = {v: k for k, v in col_mapping.items()}
+        # Mapeo de seguridad para garantizar nombres internos
+        # Aseguramos que 'Capa_score' se lea correctamente aunque venga como 'Capa score'
+        rename_map = {
+            'Id': 'ID',
+            'Pre-req': 'Pre_req',
+            'Pre_req': 'Pre_req', # Por si acaso
+            'Prob': 'Probabilidad',
+            'Capa id': 'Capa_id',
+            'Capa_id': 'Capa_id',
+            'Capa desc': 'Capa_desc',
+            'Capa_desc': 'Capa_desc',
+            'Capa score': 'Capa_score',
+            'Capa_score': 'Capa_score'
+        }
         df = df.rename(columns=rename_map)
+
+        # 3. Conversión de Tipos (Sanitización)
+        cols_numeric = ['ID', 'Horas', 'Coste', 'Pre_req', 'Probabilidad', 
+                        'Capa_id', 'Capa_score', 'Empleabilidad', 'Facilidad']
         
-        # 5. LIMPIEZA
-        if 'Actividad' in df.columns:
-            df = df.dropna(subset=['Actividad'])
-        
-        for col in ['Coste', 'Horas', 'Score', 'ID']:
+        for col in cols_numeric:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            
-        if 'Pre_req' not in df.columns: df['Pre_req'] = 0
-        else: df['Pre_req'] = pd.to_numeric(df['Pre_req'], errors='coerce').fillna(0)
-            
-        if 'Probabilidad' not in df.columns: df['Probabilidad'] = 1.0
-        else:
-            df['Probabilidad'] = pd.to_numeric(df['Probabilidad'], errors='coerce').fillna(1.0)
-            if df['Probabilidad'].max() > 1.5: df['Probabilidad'] /= 100.0
-            
-        if 'Tipo' not in df.columns: df['Tipo'] = 'General'
+            else:
+                # Si falta alguna columna crítica del nuevo modelo, avisamos o rellenamos
+                if col in ['Empleabilidad', 'Facilidad', 'Capa_score']:
+                    df[col] = 5 # Valor medio por defecto para no romper el cálculo
+        
+        # 4. LÓGICA DE NEGOCIO (Tus Peticiones)
 
-        # Cálculos finales
-        if 'Score' in df.columns and 'Coste' in df.columns:
-            df['Score_Real'] = df['Score'] * df['Probabilidad']
-            df['Eficiencia'] = np.where(df['Coste'] <= 0, 9999, df['Score_Real'] / df['Coste'])
-            return df, df.copy()
+        # A) SCORE BASE
+        # Fórmula: (Empleabilidad * 0.4) + (Capa_score * 0.4) + (Facilidad * 0.2)
+        df['Score_Base'] = (df['Empleabilidad'] * 0.4) + \
+                           (df['Capa_score'] * 0.4) + \
+                           (df['Facilidad'] * 0.2)
+
+        # B) PROBABILIDAD ACUMULADA (Recursividad)
+        # Creamos un diccionario para acceso rápido: ID -> {Probabilidad, Pre_req}
+        task_map = df.set_index('ID')[['Probabilidad', 'Pre_req']].to_dict('index')
+        memo_prob = {} # Memoria para no recalcular ramas repetidas
+
+        def get_prob_acumulada(task_id):
+            # Si ya lo calculé, devuélvelo (Memoization)
+            if task_id in memo_prob:
+                return memo_prob[task_id]
             
-        return pd.DataFrame(), pd.DataFrame()
+            # Si el ID no existe (ej. Pre_req=0), asumimos probabilidad 1 (sin riesgo externo)
+            if task_id not in task_map:
+                return 1.0
+            
+            node = task_map[task_id]
+            propia = node['Probabilidad']
+            parent = node['Pre_req']
+            
+            # Caso Base: No tiene padre (Pre_req es 0)
+            if parent == 0:
+                acumulada = propia
+            else:
+                # Caso Recursivo: Mi Prob * Prob Acumulada de mi Padre
+                acumulada = propia * get_prob_acumulada(parent)
+            
+            memo_prob[task_id] = acumulada
+            return acumulada
+
+        # Aplicamos la función recursiva a cada fila
+        df['Probabilidad_Acumulada'] = df['ID'].apply(get_prob_acumulada)
+
+        # C) SCORE REAL (El KPI final para el Optimizador)
+        # Valor ajustado al riesgo real de la cadena
+        df['Score_Real'] = df['Score_Base'] * df['Probabilidad_Acumulada']
+
+        # D) EFICIENCIA / ROI
+        # Evitamos división por cero. Si coste es 0, eficiencia es muy alta (9999)
+        df['Eficiencia'] = np.where(df['Coste'] <= 0, 9999, df['Score_Real'] / df['Coste'])
+        df['ROI'] = df['Eficiencia'] # Alias para visualización
+
+        return df, df.copy()
 
     except Exception as e:
-        # Este mensaje te dirá si el archivo no existe realmente
-        st.error(f"Error cargando Excel: {e}")
+        st.error(f"Error crítico en data_loader: {e}")
         return pd.DataFrame(), pd.DataFrame()
