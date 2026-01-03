@@ -139,6 +139,9 @@ with tabs[0]: # CONTEXTO (NUEVA PESTAÑA)
     cols[2].metric("Data & Memory", "9 pts", "Base del Conocimiento")
     cols[3].metric("Models (LLMs)", "7 pts", "Commodity Potente")
     cols[4].metric("Infrastructure", "5 pts", "Utility")
+    
+    st.divider()
+    st.caption("ℹ️ **Architecture Note:** This system uses a Hybrid AI approach. Unstructured market data is processed by LLMs (Claude 3.5 Sonnet) to detect bias, while structured optimization is handled by deterministic algorithms (Python/Pulp) to ensure mathematical correctness. See README for ADRs.")
 
 with tabs[1]: # PLAN
     c1, c2 = st.columns([2,1])
@@ -293,6 +296,7 @@ with tabs[7]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
