@@ -242,78 +242,73 @@ with tabs[3]: # FRONTERA
         * **Si tu estrella está en la zona plana (arriba a la derecha):** Ya has capturado casi todo el valor del Excel. Gastar más apenas te aportará mejoras (Retornos Decrecientes).
         """)
 
-with tabs[4]: # MAPA DE CALOR (NUEVO)
-    st.markdown("### 🗺️ Mapa de Restricciones (Dinero vs Tiempo)")
-    st.markdown("Este mapa responde a: **¿Qué me frena más?** Analiza combinaciones de tiempo y dinero para ver dónde se dispara tu valor.")
-
-    col_heatmap, col_info = st.columns([3, 1])
-
-    with col_info:
-        st.info("""
-        **Cómo leer esto:**
-        * **Eje X:** Si te mueves a la derecha, pones más dinero.
-        * **Eje Y:** Si subes, pones más horas.
-        * **Color:** Cuanto más brillante (Amarillo/Rojo), más valor consigues.
+with tabs[4]:  # MAPA DE RESTRICCIONES
+    st.markdown("### Mapa de Restricciones (Diagnóstico de Cuello de Botella)")
+    
+    if st.button("Generar Análisis"):
+        # Grid más fino
+        b_steps = np.linspace(0, 1000, 12)
+        h_steps = np.linspace(0, 500, 12)
         
-        **Estrategia:**
-        Busca la dirección en la que el color cambia más rápido. Esa es tu mejor inversión.
-        """)
-
-    with col_heatmap:
-        if st.button("🔥 Generar Mapa de Calor"):
-            with st.spinner("Simulando múltiples realidades paralelas..."):
-                # 1. Definimos la rejilla de simulación
-                # Presupuesto: de 0 al doble del actual (5 pasos)
-                # Horas: de 0 al doble del actual (5 pasos)
-                # Total: 25 optimizaciones. No ponemos muchas para que no sea lento.
-                
-                b_max = max(1000, budget * 1.5)
-                h_max = max(500, hours_total * 1.5)
-                
-                b_steps = np.linspace(0, b_max, 8) # 8 cortes de presupuesto
-                h_steps = np.linspace(0, h_max, 8) # 8 cortes de horas
-                
-                z_values = [] # Aquí guardaremos los scores
-                
-                # Bucle anidado (Grid Search)
-                for h_sim in h_steps:
-                    row = []
-                    for b_sim in b_steps:
-                        # Ejecutamos el motor para esta combinación exacta
-                        res = run_optimization(df, b_sim, h_sim)
-                        row.append(res['Score_Real'].sum())
-                    z_values.append(row)
-                
-                # 2. Pintamos el Heatmap con Plotly
-                fig_hm = go.Figure(data=go.Heatmap(
-                    z=z_values,
-                    x=b_steps,
-                    y=h_steps,
-                    colorscale='Viridis',
-                    colorbar=dict(title='Valor Estratégico'),
-                    hovertemplate='Presupuesto: %{x:.0f}€<br>Horas: %{y:.0f}h<br>Valor: %{z:.1f}<extra></extra>'
-                ))
-                
-                # 3. Marcamos TU posición actual
-                fig_hm.add_trace(go.Scatter(
-                    x=[df_opt['Coste'].sum()],
-                    y=[df_opt['Horas'].sum()],
-                    mode='markers',
-                    marker=dict(color='red', size=15, symbol='x', line=dict(width=2, color='white')),
-                    name="TÚ (Plan Actual)"
-                ))
-
-                fig_hm.update_layout(
-                    title="Superficie de Valor Máximo",
-                    xaxis_title="Inversión (€)",
-                    yaxis_title="Dedicación (Horas)"
-                )
-                
-                st.plotly_chart(fig_hm, use_container_width=True)
-                
-                # Diagnóstico Automático
-                st.success(f"📍 Tu plan actual usa **{df_opt['Coste'].sum()}€** y **{df_opt['Horas'].sum()}h**. Mira el mapa: ¿Si te mueves a la derecha (más dinero) cambia el color? ¿O solo cambia si subes (más tiempo)?")
-                
+        z_values = []
+        for h_sim in h_steps:
+            row = []
+            for b_sim in b_steps:
+                res = run_optimization(df, b_sim, h_sim)
+                row.append(res['Score_Real'].sum())
+            z_values.append(row)
+        
+        # Heatmap con contornos
+        fig = go.Figure()
+        
+        # Superficie de color
+        fig.add_trace(go.Heatmap(
+            z=z_values, x=b_steps, y=h_steps,
+            colorscale='Viridis',
+            colorbar=dict(title='Valor')
+        ))
+        
+        # Líneas de restricción actuales
+        fig.add_vline(x=budget, line_dash="dash", line_color="red", 
+                      annotation_text=f"Tu €: {budget}")
+        fig.add_hline(y=hours_total, line_dash="dash", line_color="red",
+                      annotation_text=f"Tus horas: {hours_total}")
+        
+        # Tu posición
+        fig.add_trace(go.Scatter(
+            x=[budget], y=[hours_total],
+            mode='markers+text',
+            marker=dict(color='red', size=15, symbol='x'),
+            text=["TÚ"], textposition="top right"
+        ))
+        
+        fig.update_layout(
+            xaxis_title="Presupuesto disponible (€)",
+            yaxis_title="Horas disponibles"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # DIAGNÓSTICO AUTOMÁTICO REAL
+        # Calcular sensibilidades
+        val_actual = run_optimization(df, budget, hours_total)['Score_Real'].sum()
+        val_mas_dinero = run_optimization(df, budget + 100, hours_total)['Score_Real'].sum()
+        val_mas_horas = run_optimization(df, budget, hours_total + 50)['Score_Real'].sum()
+        
+        delta_dinero = val_mas_dinero - val_actual
+        delta_horas = val_mas_horas - val_actual
+        
+        st.markdown("### Diagnóstico")
+        col1, col2 = st.columns(2)
+        col1.metric("Si añades €100", f"+{delta_dinero:.2f} pts", 
+                    "No te limita el dinero" if delta_dinero < 0.5 else "Invierte más")
+        col2.metric("Si añades 50h", f"+{delta_horas:.2f} pts",
+                    "No te limita el tiempo" if delta_horas < 0.5 else "Busca más tiempo")
+        
+        if delta_horas > delta_dinero:
+            st.warning("Tu cuello de botella es TIEMPO. Más dinero no te ayuda mucho.")
+        else:
+            st.warning("Tu cuello de botella es DINERO. Más horas no te ayuda mucho.")
+            
 with tabs[5]: # AUDITORÍA (ACTUALIZADA)
     st.markdown("### 🕵️ Auditoría del Algoritmo")
     st.markdown("Desglose del cálculo de `Score_Base` y `Probabilidad_Acumulada`.")
@@ -376,6 +371,7 @@ with tabs[8]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
