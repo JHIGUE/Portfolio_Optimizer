@@ -4,20 +4,23 @@ import numpy as np
 from datetime import datetime, timedelta
 import heapq
 
-def run_optimization(df, budget, hours):
+def run_optimization(df, hours, budget=None):
     # Mochila (Knapsack)
     prob = pulp.LpProblem("Opt", pulp.LpMaximize)
     rows = df.index.tolist()
     x = pulp.LpVariable.dicts("Sel", rows, cat='Binary')
     
-    # Objetivo: Maximizar Score_Real (Ya calculado con probabilidad acumulada)
+    # 1. Objetivo: Maximizar Score_Real
     prob += pulp.lpSum([df.loc[i, 'Score_Real'] * x[i] for i in rows])
     
-    # Restricciones
-    prob += pulp.lpSum([df.loc[i, 'Coste'] * x[i] for i in rows]) <= budget
+    # 2. Restricción PRINCIPAL: Horas (Siempre activa)
     prob += pulp.lpSum([df.loc[i, 'Horas'] * x[i] for i in rows]) <= hours
     
-    # Dependencias Topológicas
+    # 3. Restricción SECUNDARIA: Presupuesto (Solo si el usuario lo activa)
+    if budget is not None:
+        prob += pulp.lpSum([df.loc[i, 'Coste'] * x[i] for i in rows]) <= budget
+    
+    # 4. Dependencias Topológicas (Igual que antes)
     if 'ID' in df.columns and 'Pre_req' in df.columns:
         id_map = dict(zip(df['ID'], df.index))
         for i in rows:
@@ -110,3 +113,4 @@ def run_monte_carlo(df_plan, iterations=500):
         
         res.append({'Horas': real_h, 'Valor': real_v})
     return pd.DataFrame(res)
+
