@@ -91,7 +91,7 @@ k3.metric("Coste Resultante", f"{coste_real} €", f"vs {presupuesto_str}")
 
 k4.metric("Actividades", len(df_opt))
 
-tabs = st.tabs(["📖 Contexto", "🎯 Plan", "📅 Gantt", "📈 Frontera", "🗺️ Mapa Calor", "🔍 Auditoría", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
+tabs = st.tabs(["📖 Contexto", "🎯 Plan", "📅 Gantt", "📈 Curva de Valor", "🔍 Auditoría", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
 
 with tabs[0]: # CONTEXTO
     st.markdown("## 🧠 Manifiesto del Algoritmo (SPO)")
@@ -196,140 +196,57 @@ with tabs[2]: # GANTT
         st.success(f"📅 Fin Estimado: **{gantt['Fin'].max().strftime('%d/%m/%Y')}**")
     else: st.info("Sin tareas seleccionadas.")
 
-with tabs[3]: # FRONTERA
-    st.markdown("### 📈 Frontera de Eficiencia de Pareto")
-    st.markdown("Este gráfico muestra todo el recorrido posible: desde invertir 0€ hasta **comprarlo todo**. El punto rojo eres tú.")
+with tabs[3]: # CURVA DE VALOR (Sustituye a Frontera y Mapa Calor)
+    st.markdown("### 📈 Análisis de Sensibilidad Temporal")
+    st.markdown("Esta curva responde a: **¿Cuánto valor gano si dedico más horas?** (Diminishing Returns del Tiempo)")
     
-    if st.button("🚀 Calcular Frontera"):
-        # 1. Definimos el horizonte: ¿Cuánto costaría hacerlo TODO?
-        # Sumamos el coste de TODAS las filas del Excel
-        max_possible_cost = df['Coste'].sum()
+    if st.button("🚀 Calcular Curva"):
+        # Simulamos rangos de Horas (de 0 a 1.5 veces tu disponibilidad actual)
+        # Asumimos presupuesto infinito para ver el potencial puro del tiempo
+        max_h = max(1000, hours_total * 2)
+        steps = np.linspace(0, max_h, 30)
         
-        # Simulamos desde 0 hasta el coste total (con un margen del 5% para que se vea bonito)
-        # Usamos 40 pasos para que la curva sea muy suave
-        limit_sim = max(max_possible_cost * 1.05, budget * 1.5)
-        steps = np.linspace(0, limit_sim, 40)
-        
-        data_frontier = []
+        data_curve = []
         pbar = st.progress(0)
         
-        # Ejecutamos la simulación 40 veces
-        for i, b_sim in enumerate(steps):
-            # Mantenemos las horas fijas, variamos el dinero
-            r = run_optimization(df, b_sim, hours_total)
-            data_frontier.append({
-                'Presupuesto': b_sim, 
+        for i, h_sim in enumerate(steps):
+            # Optimizamos variando horas, SIN límite de presupuesto (budget=None)
+            r = run_optimization(df, h_sim, budget=None) 
+            data_curve.append({
+                'Horas_Disp': h_sim, 
                 'Valor': r['Score_Real'].sum(),
-                'Coste_Real': r['Coste'].sum()
+                'Coste_Asociado': r['Coste'].sum() # Informativo
             })
-            pbar.progress((i+1)/40)
+            pbar.progress((i+1)/30)
             
-        df_front = pd.DataFrame(data_frontier)
+        df_curve = pd.DataFrame(data_curve)
         
-        # 2. Pintamos la Curva Completa (Azul)
-        fig_f = px.line(df_front, x="Coste_Real", y="Valor", markers=True, 
-                        title="Frontera de Eficiencia (Valor vs Inversión)", 
-                        labels={"Coste_Real": "Inversión Acumulada (€)", "Valor": "Valor Estratégico Total"})
-        
-        # 3. Calculamos TU posición exacta (El plan actual)
-        current_cost_real = df_opt['Coste'].sum()
-        current_val_real = val
-        
-        # 4. AÑADIMOS LA LÍNEA VERTICAL (Tu Límite)
-        # Esto dibuja una pared roja en tu gasto actual
-        fig_f.add_vline(x=current_cost_real, line_width=1, line_dash="dash", line_color="red")
-        
-        # 5. AÑADIMOS TU PUNTO (Estrella Roja)
-        fig_f.add_trace(go.Scatter(
-            x=[current_cost_real], 
-            y=[current_val_real],
-            mode='markers+text',
-            marker=dict(color='red', size=15, symbol='star'),
-            text=["TÚ"], textposition="top center",
-            name="Tu Plan Actual"
-        ))
-        
-        # Forzamos que el eje X muestre todo el recorrido
-        fig_f.update_layout(xaxis_range=[0, limit_sim])
-        
-        st.plotly_chart(fig_f, use_container_width=True)
-        
-        st.info(f"""
-        **📍 Tu Diagnóstico:**
-        Estás invirtiendo **{current_cost_real}€**.
-        
-        * **Si tu estrella está en una pendiente empinada:** ¡Sigue invirtiendo! Cada euro extra te da mucho valor.
-        * **Si tu estrella está en la zona plana (arriba a la derecha):** Ya has capturado casi todo el valor del Excel. Gastar más apenas te aportará mejoras (Retornos Decrecientes).
-        """)
-
-with tabs[4]:  # MAPA DE RESTRICCIONES
-    st.markdown("### Mapa de Restricciones (Diagnóstico de Cuello de Botella)")
-    
-    if st.button("Generar Análisis"):
-        # Grid más fino
-        b_steps = np.linspace(0, 1000, 12)
-        h_steps = np.linspace(0, 500, 12)
-        
-        z_values = []
-        for h_sim in h_steps:
-            row = []
-            for b_sim in b_steps:
-                res = run_optimization(df, b_sim, h_sim)
-                row.append(res['Score_Real'].sum())
-            z_values.append(row)
-        
-        # Heatmap con contornos
-        fig = go.Figure()
-        
-        # Superficie de color
-        fig.add_trace(go.Heatmap(
-            z=z_values, x=b_steps, y=h_steps,
-            colorscale='Viridis',
-            colorbar=dict(title='Valor')
-        ))
-        
-        # Líneas de restricción actuales
-        fig.add_vline(x=budget, line_dash="dash", line_color="red", 
-                      annotation_text=f"Tu €: {budget}")
-        fig.add_hline(y=hours_total, line_dash="dash", line_color="red",
-                      annotation_text=f"Tus horas: {hours_total}")
+        # Gráfico
+        fig_c = px.line(df_curve, x="Horas_Disp", y="Valor", markers=True,
+                        title="Curva de Valor vs Dedicación",
+                        labels={"Horas_Disp": "Horas Invertidas", "Valor": "Impacto Profesional"})
         
         # Tu posición
-        fig.add_trace(go.Scatter(
-            x=[budget], y=[hours_total],
-            mode='markers+text',
-            marker=dict(color='red', size=15, symbol='x'),
-            text=["TÚ"], textposition="top right"
+        fig_c.add_vline(x=hours_total, line_dash="dash", line_color="red", annotation_text="Tu Tiempo Actual")
+        fig_c.add_trace(go.Scatter(
+            x=[hours_total], y=[val], mode='markers+text', 
+            marker=dict(color='red', size=15, symbol='star'),
+            text=["TÚ"], textposition="top left", name="Plan Actual"
         ))
         
-        fig.update_layout(
-            xaxis_title="Presupuesto disponible (€)",
-            yaxis_title="Horas disponibles"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig_c, use_container_width=True)
         
-        # DIAGNÓSTICO AUTOMÁTICO REAL
-        # Calcular sensibilidades
-        val_actual = run_optimization(df, budget, hours_total)['Score_Real'].sum()
-        val_mas_dinero = run_optimization(df, budget + 100, hours_total)['Score_Real'].sum()
-        val_mas_horas = run_optimization(df, budget, hours_total + 50)['Score_Real'].sum()
+        # Diagnóstico Marginal
+        st.info(f"""
+        **Diagnóstico:**
+        Con **{hours_total} horas**, consigues **{val:.1f} puntos**.
+        El coste asociado a este plan de tiempo es de **{coste_real}€**.
         
-        delta_dinero = val_mas_dinero - val_actual
-        delta_horas = val_mas_horas - val_actual
-        
-        st.markdown("### Diagnóstico")
-        col1, col2 = st.columns(2)
-        col1.metric("Si añades €100", f"+{delta_dinero:.2f} pts", 
-                    "No te limita el dinero" if delta_dinero < 0.5 else "Invierte más")
-        col2.metric("Si añades 50h", f"+{delta_horas:.2f} pts",
-                    "No te limita el tiempo" if delta_horas < 0.5 else "Busca más tiempo")
-        
-        if delta_horas > delta_dinero:
-            st.warning("Tu cuello de botella es TIEMPO. Más dinero no te ayuda mucho.")
-        else:
-            st.warning("Tu cuello de botella es DINERO. Más horas no te ayuda mucho.")
+        * **Si la curva sigue subiendo:** Tienes capacidad de absorber más conocimiento si sacas tiempo.
+        * **Si la curva se aplana:** Estás saturado. Estudiar más horas no te dará mejores skills (ya has cogido todo lo bueno).
+        """)
             
-with tabs[5]: # AUDITORÍA (ACTUALIZADA)
+with tabs[4]: # AUDITORÍA (ACTUALIZADA)
     st.markdown("### 🕵️ Auditoría del Algoritmo")
     st.markdown("Desglose del cálculo de `Score_Base` y `Probabilidad_Acumulada`.")
     
@@ -350,7 +267,7 @@ with tabs[5]: # AUDITORÍA (ACTUALIZADA)
         }
     )
 
-with tabs[6]: # RIESGO
+with tabs[5]: # RIESGO
     if st.button("Lanzar Simulación Monte Carlo"):
         mc = run_monte_carlo(df_opt)
         
@@ -378,19 +295,20 @@ with tabs[6]: # RIESGO
         * **Valor Esperado:** De media, este plan aporta **{avg_value:.1f} puntos**.
         """)
 
-with tabs[7]: # COMPARADOR
+with tabs[6]: # COMPARADOR
     if st.session_state['escenarios']:
         cdf = pd.DataFrame(st.session_state['escenarios'])
         st.dataframe(cdf, use_container_width=True)
         st.plotly_chart(px.bar(cdf, x='Nombre', y='Valor', color='Coste'), use_container_width=True)
     else: st.info("Añade escenarios.")
 
-with tabs[8]: # EXPORTAR
+with tabs[7]: # EXPORTAR
     if not df_opt.empty:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
