@@ -59,13 +59,13 @@ st.sidebar.divider()
 sc_name = st.sidebar.text_input("Nombre Escenario", "Escenario A")
 c1, c2 = st.sidebar.columns(2)
 if c1.button("💾 Comparar"):
-    res = run_optimization(df, budget, hours_total)
+    res = run_optimization(df, hours_total, budget)
     st.session_state['escenarios'].append({'Nombre': sc_name, 'Valor': res['Score_Real'].sum(), 'Coste': res['Coste'].sum()})
     st.sidebar.success("Añadido")
 
 if c2.button("📜 Historial"):
-    res = run_optimization(df, budget, hours_total)
-    save_history(sc_name, budget, hours_total, res['Score_Real'].sum(), res['Coste'].sum(), res['Horas'].sum(), len(res))
+    res = run_optimization(df, hours_total, budget)
+    save_history(sc_name, hours_total, budget, res['Score_Real'].sum(), res['Coste'].sum(), res['Horas'].sum(), len(res))
     st.sidebar.success("Guardado")
 if st.sidebar.button("🗑️ Reset"): st.session_state['escenarios'] = []
 
@@ -291,6 +291,7 @@ with tabs[7]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
