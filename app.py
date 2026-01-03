@@ -73,7 +73,7 @@ k4.metric("Items", len(df_opt))
 
 tabs = st.tabs(["📖 Contexto", "🎯 Plan", "📅 Gantt", "📈 Frontera", "🗺️ Mapa Calor", "🔍 Auditoría", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
 
-with tabs[0]: # CONTEXTO (NUEVA PESTAÑA)
+with tabs[0]: # CONTEXTO
     st.markdown("## 🧠 Manifiesto del Algoritmo (SPO)")
     st.markdown("""
     Bienvenido al **Strategic Portfolio Optimizer**. Esta herramienta no decide por ti, pero **matematiza tu intuición** para maximizar el impacto de tu carrera hacia el perfil de *AI Solutions Architect*.
@@ -115,6 +115,14 @@ with tabs[0]: # CONTEXTO (NUEVA PESTAÑA)
             * **Burbujas Rojas:** Descartadas (No caben en presupuesto o tiempo).
             """)
             
+        with st.expander("🗺️ Mapa de Calor (Restricciones) - ¡NUEVO!"):
+            st.markdown("""
+            **Análisis de Sensibilidad (Constraint Landscape).**
+            Responde a: *¿Qué me está frenando más: el dinero o el tiempo?*
+            * **Movimiento Horizontal (Derecha):** Si añades dinero y el color NO cambia, tienes **holgura financiera**. No gastes más.
+            * **Movimiento Vertical (Arriba):** Si añades horas y el color se vuelve amarillo brillante, tu cuello de botella es el **tiempo**.
+            """)
+
         with st.expander("📅 Gantt Inteligente (Back-Propagation)"):
             st.markdown("""
             El cronograma no es lineal. Usa lógica de **Score Heredado**:
@@ -126,7 +134,7 @@ with tabs[0]: # CONTEXTO (NUEVA PESTAÑA)
             st.markdown("""
             * **La Curva Azul:** Todo el valor posible que podrías comprar si fueras rico.
             * **La Estrella Roja (TÚ):** Tu posición actual.
-            * **Estrategia:** Si estás en la zona empinada, invierte más. Si estás en la zona plana, guarda el dinero.
+            * **Estrategia:** Si estás en la zona empinada, invierte más. Si estás en la zona plana, guarda el dinero (Retornos Decrecientes).
             """)
 
     st.divider()
@@ -368,6 +376,7 @@ with tabs[8]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
