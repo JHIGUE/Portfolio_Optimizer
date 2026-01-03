@@ -93,73 +93,56 @@ k4.metric("Actividades", len(df_opt))
 
 tabs = st.tabs(["📖 Contexto", "🎯 Plan", "📅 Gantt", "📈 Curva de Valor", "🔍 Auditoría", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
 
-with tabs[0]: # CONTEXTO
-    st.markdown("## 🧠 Manifiesto del Algoritmo (SPO)")
+with tabs[0]: # CONTEXTO (ACTUALIZADO A LA NUEVA REALIDAD)
+    st.markdown("## 🧠 Manifiesto del Algoritmo (SPO) - Time-First Edition")
     st.markdown("""
-    Bienvenido al **Strategic Portfolio Optimizer**. Esta herramienta no decide por ti, pero **matematiza tu intuición** para maximizar el impacto de tu carrera hacia el perfil de *AI Solutions Architect*.
+    **La realidad de 2026:** El conocimiento de IA es abundante y barato (Open Source). Tu verdadera restricción no es el dinero, es tu **capacidad cognitiva y tu tiempo**.
     """)
     
     c1, c2 = st.columns(2)
     
     with c1:
-        st.info("### 1. ¿Qué es el 'Valor Estratégico'?")
+        st.info("### 1. La Lógica del Motor")
         st.markdown("""
-        El **KPI Principal (Score Real)** no mide dinero ni horas. Mide **Impacto Profesional**.
+        Hemos refactorizado el optimizador para reflejar la realidad del mercado:
         
-        Se calcula mediante una **Fórmula Ponderada Ajustada al Riesgo**:
+        * **⏳ Input Principal (El Cuello de Botella):** Tus horas disponibles. El algoritmo busca el máximo impacto que cabe en tu agenda.
+        * **💰 Input Secundario (El Filtro):** El presupuesto es opcional. Solo actúa como un "freno" si decides activarlo.
+        * **💎 Output (El Objetivo):** Maximizar el **Valor Estratégico (Score Real)**.
         """)
+        
+        st.markdown("#### 📐 La Fórmula del Valor")
         st.latex(r'''
         ScoreBase = (Empleabilidad \times 0.4) + (Taxonomía \times 0.4) + (Facilidad \times 0.2)
         ''')
-        st.markdown("""
-        * **Empleabilidad (40%):** Demanda real del mercado en 2026.
-        * **Taxonomía (40%):** Relevancia para el rol de Arquitecto (Orchestration/Governance > Infra).
-        * **Facilidad (20%):** Priorización de *Quick Wins*.
-        """)
-        
-        st.markdown("#### 📉 El Ajuste de Realidad")
-        st.markdown("El valor final se penaliza por la **Probabilidad Acumulada** de la cadena de dependencias:")
-        st.latex(r'''
-        ValorReal = ScoreBase \times (P_{propia} \times P_{padre} \times P_{abuelo}...)
-        ''')
-        st.caption("Una tarea valiosa (10 pts) que depende de 3 tareas difíciles pierde valor real hoy.")
+        st.caption("Ponderamos qué pide el mercado, qué te posiciona como Arquitecto y qué puedes aprender rápido.")
 
     with c2:
         st.success("### 2. Guía de Interpretación Visual")
         
-        with st.expander("🎯 Matriz de Valor (Scatter)", expanded=True):
+        with st.expander("📈 Curva de Valor (Sensibilidad Temporal) - ¡NUEVO!"):
             st.markdown("""
-            * **Eje Y (Alto):** Lo que debes hacer (Alto Valor).
-            * **Eje X (Derecha):** Lo que te costará dinero.
-            * **Burbujas Verdes:** Seleccionadas por el algoritmo.
-            * **Burbujas Rojas:** Descartadas (No caben en presupuesto o tiempo).
-            """)
-            
-        with st.expander("🗺️ Mapa de Calor (Restricciones) - ¡NUEVO!"):
-            st.markdown("""
-            **Análisis de Sensibilidad (Constraint Landscape).**
-            Responde a: *¿Qué me está frenando más: el dinero o el tiempo?*
-            * **Movimiento Horizontal (Derecha):** Si añades dinero y el color NO cambia, tienes **holgura financiera**. No gastes más.
-            * **Movimiento Vertical (Arriba):** Si añades horas y el color se vuelve amarillo brillante, tu cuello de botella es el **tiempo**.
+            **Responde a:** *¿Merece la pena estudiar más horas?*
+            * **Curva Empinada:** Estás aprendiendo skills críticos. Cada hora extra vale oro.
+            * **Curva Plana (Meseta):** Rendimientos decrecientes. Estudiar más horas solo añade valor marginal (skills de relleno).
+            * **Tu Posición (Línea Roja):** Te dice si te has quedado corto o si te estás pasando de frenada.
             """)
 
-        with st.expander("📅 Gantt Inteligente (Back-Propagation)"):
+        with st.expander("📅 Gantt Topológico (Back-Propagation)"):
             st.markdown("""
-            El cronograma no es lineal. Usa lógica de **Score Heredado**:
-            * Si una Tarea A (pequeña) bloquea a una Tarea B (enorme valor), **la Tarea A hereda la prioridad de B**.
-            * El algoritmo prioriza los "desbloqueadores" de valor.
+            El orden no es casual. Si una tarea pequeña desbloquea a una grande, el algoritmo la pone primero.
+            * **Color:** Indica la Capa Estratégica (Orquestación, Datos, Gobierno...).
             """)
             
-        with st.expander("📈 Frontera de Pareto"):
+        with st.expander("🎯 Matriz de Valor (Scatter)"):
             st.markdown("""
-            * **La Curva Azul:** Todo el valor posible que podrías comprar si fueras rico.
-            * **La Estrella Roja (TÚ):** Tu posición actual.
-            * **Estrategia:** Si estás en la zona empinada, invierte más. Si estás en la zona plana, guarda el dinero (Retornos Decrecientes).
+            * **Eje Y:** Impacto Profesional.
+            * **Eje X:** Coste en Euros (ahora secundario).
+            * **Verde/Rojo:** Qué entra en tu plan vs qué se queda fuera por falta de tiempo.
             """)
 
     st.divider()
     st.markdown("### ⚙️ Taxonomía de Arquitectura 2026")
-    st.markdown("Las actividades se clasifican y puntúan según su capa estratégica:")
     
     cols = st.columns(5)
     cols[0].metric("Orchestration", "10 pts", "Core Agéntico")
@@ -169,7 +152,7 @@ with tabs[0]: # CONTEXTO
     cols[4].metric("Infrastructure", "5 pts", "Utility")
     
     st.divider()
-    st.caption("ℹ️ **Architecture Note:** This system uses a Hybrid AI approach. Unstructured market data is processed by LLMs (Claude 4.5 Opus) to detect bias, while structured optimization is handled by deterministic algorithms (Python/Pulp) to ensure mathematical correctness. See README for ADRs.")
+    st.caption("ℹ️ **Architecture Note:** Hybrid AI System. Unstructured trend analysis via LLMs (Claude) + Deterministic Optimization via Python (Pulp). See README for Architecture Decision Records (ADRs).")
 
 with tabs[1]: # PLAN
     c1, c2 = st.columns([2,1])
@@ -308,6 +291,7 @@ with tabs[7]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
