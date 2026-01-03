@@ -71,7 +71,7 @@ k2.metric("Inversión", f"{df_opt['Coste'].sum()} €", delta=f"{budget - df_opt
 k3.metric("Tiempo", f"{df_opt['Horas'].sum()} h", delta=f"{hours_total - df_opt['Horas'].sum()} h libre")
 k4.metric("Items", len(df_opt))
 
-tabs = st.tabs(["📖 Contexto", "🎯 Plan", "📅 Gantt", "📈 Frontera", "🔍 Auditoría", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
+tabs = st.tabs(["📖 Contexto", "🎯 Plan", "📅 Gantt", "📈 Frontera", "🗺️ Mapa Calor", "🔍 Auditoría", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
 
 with tabs[0]: # CONTEXTO (NUEVA PESTAÑA)
     st.markdown("## 🧠 Manifiesto del Algoritmo (SPO)")
@@ -233,8 +233,80 @@ with tabs[3]: # FRONTERA
         * **Si tu estrella está en una pendiente empinada:** ¡Sigue invirtiendo! Cada euro extra te da mucho valor.
         * **Si tu estrella está en la zona plana (arriba a la derecha):** Ya has capturado casi todo el valor del Excel. Gastar más apenas te aportará mejoras (Retornos Decrecientes).
         """)
+
+with tabs[4]: # MAPA DE CALOR (NUEVO)
+    st.markdown("### 🗺️ Mapa de Restricciones (Dinero vs Tiempo)")
+    st.markdown("Este mapa responde a: **¿Qué me frena más?** Analiza combinaciones de tiempo y dinero para ver dónde se dispara tu valor.")
+
+    col_heatmap, col_info = st.columns([3, 1])
+
+    with col_info:
+        st.info("""
+        **Cómo leer esto:**
+        * **Eje X:** Si te mueves a la derecha, pones más dinero.
+        * **Eje Y:** Si subes, pones más horas.
+        * **Color:** Cuanto más brillante (Amarillo/Rojo), más valor consigues.
         
-with tabs[4]: # AUDITORÍA (ACTUALIZADA)
+        **Estrategia:**
+        Busca la dirección en la que el color cambia más rápido. Esa es tu mejor inversión.
+        """)
+
+    with col_heatmap:
+        if st.button("🔥 Generar Mapa de Calor"):
+            with st.spinner("Simulando múltiples realidades paralelas..."):
+                # 1. Definimos la rejilla de simulación
+                # Presupuesto: de 0 al doble del actual (5 pasos)
+                # Horas: de 0 al doble del actual (5 pasos)
+                # Total: 25 optimizaciones. No ponemos muchas para que no sea lento.
+                
+                b_max = max(1000, budget * 1.5)
+                h_max = max(500, hours_total * 1.5)
+                
+                b_steps = np.linspace(0, b_max, 8) # 8 cortes de presupuesto
+                h_steps = np.linspace(0, h_max, 8) # 8 cortes de horas
+                
+                z_values = [] # Aquí guardaremos los scores
+                
+                # Bucle anidado (Grid Search)
+                for h_sim in h_steps:
+                    row = []
+                    for b_sim in b_steps:
+                        # Ejecutamos el motor para esta combinación exacta
+                        res = run_optimization(df, b_sim, h_sim)
+                        row.append(res['Score_Real'].sum())
+                    z_values.append(row)
+                
+                # 2. Pintamos el Heatmap con Plotly
+                fig_hm = go.Figure(data=go.Heatmap(
+                    z=z_values,
+                    x=b_steps,
+                    y=h_steps,
+                    colorscale='Viridis',
+                    colorbar=dict(title='Valor Estratégico'),
+                    hovertemplate='Presupuesto: %{x:.0f}€<br>Horas: %{y:.0f}h<br>Valor: %{z:.1f}<extra></extra>'
+                ))
+                
+                # 3. Marcamos TU posición actual
+                fig_hm.add_trace(go.Scatter(
+                    x=[df_opt['Coste'].sum()],
+                    y=[df_opt['Horas'].sum()],
+                    mode='markers',
+                    marker=dict(color='red', size=15, symbol='x', line=dict(width=2, color='white')),
+                    name="TÚ (Plan Actual)"
+                ))
+
+                fig_hm.update_layout(
+                    title="Superficie de Valor Máximo",
+                    xaxis_title="Inversión (€)",
+                    yaxis_title="Dedicación (Horas)"
+                )
+                
+                st.plotly_chart(fig_hm, use_container_width=True)
+                
+                # Diagnóstico Automático
+                st.success(f"📍 Tu plan actual usa **{df_opt['Coste'].sum()}€** y **{df_opt['Horas'].sum()}h**. Mira el mapa: ¿Si te mueves a la derecha (más dinero) cambia el color? ¿O solo cambia si subes (más tiempo)?")
+                
+with tabs[5]: # AUDITORÍA (ACTUALIZADA)
     st.markdown("### 🕵️ Auditoría del Algoritmo")
     st.markdown("Desglose del cálculo de `Score_Base` y `Probabilidad_Acumulada`.")
     
@@ -255,7 +327,7 @@ with tabs[4]: # AUDITORÍA (ACTUALIZADA)
         }
     )
 
-with tabs[5]: # RIESGO
+with tabs[6]: # RIESGO
     if st.button("Lanzar Simulación Monte Carlo"):
         mc = run_monte_carlo(df_opt)
         
@@ -283,19 +355,20 @@ with tabs[5]: # RIESGO
         * **Valor Esperado:** De media, este plan aporta **{avg_value:.1f} puntos**.
         """)
 
-with tabs[6]: # COMPARADOR
+with tabs[7]: # COMPARADOR
     if st.session_state['escenarios']:
         cdf = pd.DataFrame(st.session_state['escenarios'])
         st.dataframe(cdf, use_container_width=True)
         st.plotly_chart(px.bar(cdf, x='Nombre', y='Valor', color='Coste'), use_container_width=True)
     else: st.info("Añade escenarios.")
 
-with tabs[7]: # EXPORTAR
+with tabs[8]: # EXPORTAR
     if not df_opt.empty:
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
