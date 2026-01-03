@@ -37,11 +37,23 @@ except Exception as e:
     st.error(f"Error carga: {e}")
     st.stop()
 
-# --- SIDEBAR ---
-st.sidebar.header("🕹️ Strategic Controls")
-budget = st.sidebar.slider("💰 Presupuesto (€)", 0, 10000, 650, step=50)
-hours_total = st.sidebar.slider("⏳ Bolsa Horas Anual", 0, 2000, 300, step=10)
+# --- SIDEBAR (CONTROLES REFACTORIZADOS) ---
+st.sidebar.header("🕹️ Controles de Estrategia")
+
+# 1. El Slider Maestro (Horas)
+hours_total = st.sidebar.slider("⏳ Tu Tiempo (Bolsa Horas Anual)", 0, 1000, 300, step=10)
 hours_week = st.sidebar.number_input("Velocidad (Horas/Semana)", 1, 40, 10)
+
+st.sidebar.divider()
+
+# 2. La Restricción Opcional (Presupuesto)
+use_budget = st.sidebar.checkbox("🔒 Activar límite de Presupuesto", value=False)
+
+if use_budget:
+    budget = st.sidebar.slider("💰 Presupuesto Máximo (€)", 0, 5000, 600, step=50)
+else:
+    budget = None # Señal para el motor de que no hay límite
+    st.sidebar.caption("✅ Presupuesto ilimitado (El coste será un resultado, no un límite).")
 
 st.sidebar.divider()
 sc_name = st.sidebar.text_input("Nombre Escenario", "Escenario A")
@@ -57,19 +69,27 @@ if c2.button("📜 Historial"):
     st.sidebar.success("Guardado")
 if st.sidebar.button("🗑️ Reset"): st.session_state['escenarios'] = []
 
-# --- MOTOR ---
-df_opt = run_optimization(df, budget, hours_total)
+# --- MOTOR PRINCIPAL ---
+df_opt = run_optimization(df, hours_total, budget) # Pasamos budget (None o número)
 val = df_opt['Score_Real'].sum()
+coste_real = df_opt['Coste'].sum()
 
-# --- DASHBOARD ---
+# --- DASHBOARD (KPIs ACTUALIZADOS) ---
 st.title("Strategic Portfolio Optimizer (SPO)")
-st.caption(f"Roadmap 2026 | Modelo Ponderado (Empleabilidad + Capa + Facilidad)")
+st.caption(f"Roadmap 2026 | Estrategia basada en Tiempo")
 
 k1, k2, k3, k4 = st.columns(4)
-k1.metric("Valor Estratégico (Real)", f"{val:.1f}")
-k2.metric("Inversión", f"{df_opt['Coste'].sum()} €", delta=f"{budget - df_opt['Coste'].sum()} € libre")
-k3.metric("Tiempo", f"{df_opt['Horas'].sum()} h", delta=f"{hours_total - df_opt['Horas'].sum()} h libre")
-k4.metric("Items", len(df_opt))
+k1.metric("Valor Estratégico", f"{val:.1f}")
+
+# El Tiempo es la restricción (Input vs Usado)
+k2.metric("Tiempo Usado", f"{df_opt['Horas'].sum()} h", delta=f"{hours_total - df_opt['Horas'].sum()} h libres")
+
+# El Coste es informativo (Output)
+delta_color = "normal" if (budget is None or coste_real <= budget) else "inverse"
+presupuesto_str = f"/ {budget}€" if budget else "(Sin límite)"
+k3.metric("Coste Resultante", f"{coste_real} €", f"vs {presupuesto_str}")
+
+k4.metric("Actividades", len(df_opt))
 
 tabs = st.tabs(["📖 Contexto", "🎯 Plan", "📅 Gantt", "📈 Frontera", "🗺️ Mapa Calor", "🔍 Auditoría", "🎲 Riesgo", "🆚 Comparador", "📥 Exportar"])
 
@@ -371,6 +391,7 @@ with tabs[8]: # EXPORTAR
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
         st.download_button("📥 Descargar Plan", buffer.getvalue(), "Plan_SPO.xlsx")
+
 
 
 
