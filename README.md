@@ -319,10 +319,10 @@ Este proyecto está bajo la Licencia MIT. Ver [LICENSE](LICENSE) para más detal
 
 ## 👤 Autor
 
-**Javier** — Senior Data Project Lead @ Randstad Digital
+**Javier Higuera Porteros** — Data & AI Project Lead
 
-- LinkedIn: [tu-perfil]
-- Medium: [tu-blog]
+- LinkedIn: [www.linkedin.com/in/javier-higuera-porteros]
+- Github: [https://github.com/JHIGUE]
 
 ---
 
