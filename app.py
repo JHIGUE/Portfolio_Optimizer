@@ -147,7 +147,7 @@ with tabs[1]: # PLAN
         st.info(f"**Insight:** Has seleccionado **{len(df_opt)} actividades** estratégicas. Las actividades en ROJO se han descartado porque consumen demasiado tiempo para el valor que aportan comparado con las seleccionadas.")
 
     with c2:
-        st.subheader("Ranking de Eficiencia")
+        st.subheader("Ranking de Eficiencia (Dedicacion Horas/Score)")
         st.dataframe(df_opt[['Actividad', 'Horas', 'Eficiencia']].sort_values(by='Eficiencia', ascending=False), 
                      hide_index=True, column_config={"Eficiencia": st.column_config.NumberColumn(format="%.2f")})
 
@@ -227,4 +227,5 @@ with tabs[7]: # EXPORTAR
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
             df_opt.to_excel(writer, sheet_name='Plan_Optimizado', index=False)
+
         st.download_button("📥 Descargar Plan (Excel)", buffer.getvalue(), "Plan_SPO.xlsx")
